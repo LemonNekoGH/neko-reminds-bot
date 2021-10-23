@@ -1,3 +1,4 @@
+import express from 'express'
 import { Telegraf } from 'telegraf'
 import packageJson from '../package.json'
 
@@ -15,12 +16,48 @@ interface Reminds {
   }
 }
 
-function main () {
-  const token = process.env.TG_DRINK_BOT_API
-  if (!token) {
-    console.error('telegram bot api token not found.')
-    return
+/**
+ * 取得 api token
+ * @throws Error 获取不到时无法继续，报错
+ */
+function getToken (): string {
+  // 从参数获取
+  const tokenArg = process.argv.find((it) => it.startsWith('--token='))
+  let token: string | undefined = ''
+  if (tokenArg) {
+    token = tokenArg.split('=')[1]
   }
+  if (token) {
+    return token
+  }
+  // 失败，从环境变量获取
+  token = process.env.TG_DRINK_BOT_API
+  if (!token) {
+    throw new Error('telegram bot api token not found.')
+  }
+  return token
+}
+
+/**
+ * 获取 webhook 地址
+ * @throws Error 获取不到时报错，无法继续
+ */
+function getWebhookUrl (): string {
+  const arg = process.argv.find((it) => it.startsWith('--webhook='))
+  let url: string = ''
+  if (arg) {
+    url = arg.split('=')[1]
+  }
+  if (!url) {
+    throw new Error('telegram webhook url not found.')
+  }
+  return url
+}
+
+async function main () {
+  const token = getToken()
+  const webhookBaseUrl = getWebhookUrl()
+
   const bot = new Telegraf(token)
 
   bot.command('info', (ctx) => {
@@ -47,12 +84,16 @@ function main () {
     console.log('received command /import')
     ctx.reply('还不能导入配置')
   })
-
-  bot.launch()
-
-  // Enable graceful stop
-  process.once('SIGINT', () => bot.stop('SIGINT'))
-  process.once('SIGTERM', () => bot.stop('SIGTERM'))
+  // 设置 webhook
+  const secretPath = `/telegraf/${bot.secretPathComponent()}`
+  await bot.telegram.setWebhook(`${webhookBaseUrl}${secretPath}`)
+  // 启动 express
+  const app = express()
+  app.get('/', (req, resp) => resp.send('柠喵的喝水小助手'))
+  app.use(bot.webhookCallback(secretPath))
+  app.listen(5500, () => {
+    console.log('Express with telegraf webhook is listening at port 5500')
+  })
 }
 
-main()
+main().then()

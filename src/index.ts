@@ -1,64 +1,102 @@
 import express from 'express'
 import { Telegraf } from 'telegraf'
 import packageJson from '../package.json'
+import fs from 'fs'
 
 interface RemindItem {
-  text: string
-  cron: string
+    text: string
+    cron: string
 }
 
-// 所有提醒项
-interface Reminds {
-  // ChatID
-  [p: number]: {
-    // 名字对应提醒项
-    [p: string]: RemindItem
+  // 所有提醒项
+  interface Reminds {
+    // ChatID
+    [p: number]: {
+      // 名字对应提醒项
+      [p: string]: RemindItem
+    }
   }
-}
 
 /**
- * 取得 api token
- * @throws Error 获取不到时无法继续，报错
- */
+   * 取得 api token
+   * @throws Error 获取不到时无法继续，报错
+   */
 function getToken (): string {
-  // 从参数获取
-  const tokenArg = process.argv.find((it) => it.startsWith('--token='))
-  let token: string | undefined = ''
-  if (tokenArg) {
-    token = tokenArg.split('=')[1]
+  return getSpecifiedArg('--token=', null, 'telegram bot token not found.')
+}
+
+// 通用的用于寻找参数的方法
+function getSpecifiedArg (prefix: string, onFound: ((arg: string) => Error | undefined) | null, errorText: string): string {
+  const arg = process.argv.find((it) => it.startsWith(prefix))
+  let ret = ''
+  if (arg) {
+    ret = arg.substr(prefix.length)
   }
-  if (token) {
-    return token
+  if (!ret && errorText) {
+    throw new Error(errorText)
   }
-  // 失败，从环境变量获取
-  token = process.env.TG_DRINK_BOT_API
-  if (!token) {
-    throw new Error('telegram bot api token not found.')
+  if (onFound) {
+    const error = onFound(ret)
+    if (error) {
+      throw error
+    }
   }
-  return token
+  return ret
 }
 
 /**
- * 获取 webhook 地址
- * @throws Error 获取不到时报错，无法继续
- */
+   * 获取 webhook 地址
+   * @throws Error 获取不到时报错，无法继续
+   */
 function getWebhookUrl (): string {
-  const arg = process.argv.find((it) => it.startsWith('--webhook='))
-  let url: string = ''
-  if (arg) {
-    url = arg.split('=')[1]
-  }
-  if (!url) {
-    throw new Error('telegram webhook url not found.')
-  }
-  return url
+  return getSpecifiedArg('--webhook=', null, '')
 }
+
+/**
+   * 获取提醒数据存储位置
+   * @returns 提醒数据存储位置
+   */
+function getStoreFilePath (): string {
+  return getSpecifiedArg('--store=', (path) => {
+    try {
+      fs.accessSync(path)
+    } catch (e: any) {
+      return e
+    }
+    return undefined
+  }, 'data store file not found.')
+}
+
+class SettingProgress {
+  step: 'naming' | 'text' | 'cron' = 'naming'
+  chatId: number
+  name: string = ''
+  cron: string = ''
+
+  constructor (chatId: number) {
+    this.chatId = chatId
+  }
+}
+
+const progressChatIdMap = new Map<number, SettingProgress>()
 
 async function main () {
   const token = getToken()
   const webhookBaseUrl = getWebhookUrl()
+  const storeFilePath = getStoreFilePath()
 
   const bot = new Telegraf(token)
+
+  bot.on('text', (ctx) => {
+    if (ctx.message.text === '取消') {
+      if (progressChatIdMap.has(ctx.chat.id)) {
+        progressChatIdMap.delete(ctx.chat.id)
+        ctx.reply('已经取消设置过程')
+      } else {
+        ctx.reply('没有开始设置，取消个啥')
+      }
+    }
+  })
 
   bot.command('info', (ctx) => {
     console.log('received command /info')
@@ -72,7 +110,8 @@ async function main () {
 
   bot.command('start', (ctx) => {
     console.log('received command /start')
-    ctx.reply('还没有准备好设置向导')
+    progressChatIdMap.set(ctx.chat.id, new SettingProgress(ctx.chat.id))
+    ctx.reply('开始设置，请为你的提醒项起一个名称，或回复“取消”停止设置')
   })
 
   bot.command('edit', (ctx) => {
@@ -84,16 +123,21 @@ async function main () {
     console.log('received command /import')
     ctx.reply('还不能导入配置')
   })
-  // 设置 webhook
-  const secretPath = `/telegraf/${bot.secretPathComponent()}`
-  await bot.telegram.setWebhook(`${webhookBaseUrl}${secretPath}`)
-  // 启动 express
-  const app = express()
-  app.get('/', (req, resp) => resp.send('柠喵的喝水小助手'))
-  app.use(bot.webhookCallback(secretPath))
-  app.listen(5500, () => {
-    console.log('Express with telegraf webhook is listening at port 5500')
-  })
+  if (webhookBaseUrl) {
+    // 设置 webhook
+    const secretPath = `/telegraf/${bot.secretPathComponent()}`
+    await bot.telegram.setWebhook(`${webhookBaseUrl}${secretPath}`)
+    // 启动 express
+    const app = express()
+    app.get('/', (req, resp) => resp.send('柠喵的喝水小助手'))
+    app.use(bot.webhookCallback(secretPath))
+    app.listen(5500, () => {
+      console.log('Express with telegraf webhook is listening at port 5500')
+    })
+  } else {
+    bot.launch()
+    console.log('bot is now running')
+  }
 }
 
 main().then()

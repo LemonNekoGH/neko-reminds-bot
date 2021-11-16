@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "es6",
-    "module": "es2015",
+    "module": "commonjs",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
@@ -9,7 +9,7 @@
     "resolveJsonModule": true,
     "moduleResolution": "Node",
     "types": [
-      "telegraf"
+      "telegraf/typings"
     ]
   }
 }

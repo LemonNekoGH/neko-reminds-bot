@@ -2,27 +2,20 @@ import express from 'express'
 import { Telegraf } from 'telegraf'
 import packageJson from '../package.json'
 import fs from 'fs'
+import { DrinkBotConfig } from '../config/type'
 
 interface RemindItem {
     text: string
     cron: string
 }
 
-  // 所有提醒项
-  interface Reminds {
-    // ChatID
-    [p: number]: {
-      // 名字对应提醒项
-      [p: string]: RemindItem
-    }
+// 所有提醒项
+interface Reminds {
+  // ChatID
+  [p: number]: {
+    // 名字对应提醒项
+    [p: string]: RemindItem
   }
-
-/**
-   * 取得 api token
-   * @throws Error 获取不到时无法继续，报错
-   */
-function getToken (): string {
-  return getSpecifiedArg('--token=', null, 'telegram bot token not found.')
 }
 
 // 通用的用于寻找参数的方法
@@ -44,29 +37,6 @@ function getSpecifiedArg (prefix: string, onFound: ((arg: string) => Error | und
   return ret
 }
 
-/**
-   * 获取 webhook 地址
-   * @throws Error 获取不到时报错，无法继续
-   */
-function getWebhookUrl (): string {
-  return getSpecifiedArg('--webhook=', null, '')
-}
-
-/**
-   * 获取提醒数据存储位置
-   * @returns 提醒数据存储位置
-   */
-function getStoreFilePath (): string {
-  return getSpecifiedArg('--store=', (path) => {
-    try {
-      fs.accessSync(path)
-    } catch (e: any) {
-      return e
-    }
-    return undefined
-  }, 'data store file not found.')
-}
-
 class SettingProgress {
   step: 'naming' | 'text' | 'cron' = 'naming'
   chatId: number
@@ -81,11 +51,22 @@ class SettingProgress {
 const progressChatIdMap = new Map<number, SettingProgress>()
 
 async function main () {
-  const token = getToken()
-  const webhookBaseUrl = getWebhookUrl()
-  const storeFilePath = getStoreFilePath()
+  // 获取配置文件
+  let config: DrinkBotConfig | null = null
+  try {
+    const { config: c } = await import('../config/config')
+    config = c
+  } catch (e) {
+    console.error(e)
+    return
+  }
+  const { token, storeFile, webhookUrl: webhookBaseUrl, httpsProxyAgent, notifyChatId } = config as DrinkBotConfig
 
-  const bot = new Telegraf(token)
+  const bot = new Telegraf(token, {
+    telegram: {
+      agent: httpsProxyAgent
+    }
+  })
 
   bot.on('text', (ctx) => {
     if (ctx.message.text === '取消') {
@@ -135,8 +116,14 @@ async function main () {
       console.log('Express with telegraf webhook is listening at port 5500')
     })
   } else {
-    bot.launch()
-    console.log('bot is now running')
+    bot.launch().then(() => {
+      if (notifyChatId) {
+        bot.telegram.sendMessage(notifyChatId, '柠喵的喝水提醒小助手已成功启动')
+      }
+      console.log('bot is now running')
+    }).catch((e) => {
+      console.error(e.message)
+    })
   }
 }
 

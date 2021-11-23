@@ -68,15 +68,11 @@ async function main () {
     }
   })
 
-  bot.on('text', (ctx) => {
-    if (ctx.message.text === '取消') {
-      if (progressChatIdMap.has(ctx.chat.id)) {
-        progressChatIdMap.delete(ctx.chat.id)
-        ctx.reply('已经取消设置过程')
-      } else {
-        ctx.reply('没有开始设置，取消个啥')
-      }
+  bot.start((ctx) => {
+    if (notifyChatId) {
+      bot.telegram.sendMessage(notifyChatId, '柠喵的喝水提醒小助手已成功启动')
     }
+    console.log('bot is now running')
   })
 
   bot.command('info', (ctx) => {
@@ -104,6 +100,18 @@ async function main () {
     console.log('received command /import')
     ctx.reply('还不能导入配置')
   })
+
+  bot.on('text', (ctx) => {
+    if (ctx.message.text === '取消') {
+      if (progressChatIdMap.has(ctx.chat.id)) {
+        progressChatIdMap.delete(ctx.chat.id)
+        ctx.reply('已经取消设置过程')
+      } else {
+        ctx.reply('没有开始设置，取消个啥')
+      }
+    }
+  })
+
   if (webhookBaseUrl) {
     // 设置 webhook
     const secretPath = `/telegraf/${bot.secretPathComponent()}`
@@ -116,12 +124,7 @@ async function main () {
       console.log('Express with telegraf webhook is listening at port 5500')
     })
   } else {
-    bot.launch().then(() => {
-      if (notifyChatId) {
-        bot.telegram.sendMessage(notifyChatId, '柠喵的喝水提醒小助手已成功启动')
-      }
-      console.log('bot is now running')
-    }).catch((e) => {
+    bot.launch().catch((e) => {
       console.error(e.message)
     })
   }

@@ -1,5 +1,11 @@
 import { HttpsProxyAgent } from 'https-proxy-agent'
 
+export interface ProxyOptions {
+    protocol: 'http' | 'https'
+    host: string
+    port: number
+}
+
 export interface DrinkBotConfig {
     token: string // Telegram Bot API Token
     storeFile: string // 数据存储文件

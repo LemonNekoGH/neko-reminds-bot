@@ -3,7 +3,7 @@ import path from 'path'
 import { DrinkBotConfig } from './type'
 
 export const config: DrinkBotConfig = {
-  token: '2076456821:AAFb01mBQEczbZgGFFnnAph-WCcWGAb0iDc',
+  token: '1234567890:AbCdEfGhIjKlMnOpqRsTuVwXyz-01234567',
   storeFile: path.resolve('../testStore.json'),
   httpsProxyAgent: new HttpsProxyAgent('http://localhost:7890'),
   notifyChatId: 983682187

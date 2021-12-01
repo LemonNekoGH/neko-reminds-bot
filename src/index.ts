@@ -1,20 +1,19 @@
 import express from 'express'
-import { Context, Telegraf } from 'telegraf'
+import { Telegraf } from 'telegraf'
 import packageJson from '../package.json'
 import fs from 'fs'
 import { DrinkBotConfig } from '../config/type'
 import axios from 'axios'
-import log4js from 'log4js'
-import cron from 'node-cron'
-import cronParser from 'cron-parser'
+import log4js, { Logger } from 'log4js'
+import { SettingProgress } from './SettingProgress'
 
-interface RemindItem {
+export interface RemindItem {
     text: string
     cron: string
 }
 
 // 所有提醒项
-interface Reminds {
+export interface Reminds {
   // ChatID
   [p: number]: {
     // 名字对应提醒项
@@ -41,80 +40,52 @@ function getSpecifiedArg (prefix: string, onFound: ((arg: string) => Error | und
   return ret
 }
 
-class SettingProgress {
-  step: number = 0
-  chatId: number
-  text: string = ''
-  name: string = ''
-  cron: string = ''
-  stepName: string[] = [
-    '提醒项名称',
-    '提醒项内容',
-    '提醒周期'
-  ]
-
-  replyText: string[] = [
-    '请设置提醒项的名称',
-    '请设置要提醒的内容',
-    '请设置提醒周期：一个 [cron 表达式](https://zh.wikipedia.org/wiki/Cron)'
-  ]
-
-  constructor (chatId: number) {
-    this.chatId = chatId
-  }
-
-  // 设置提醒名步骤
-  setNameStep (text: string, ctx: Context): void {
-    this.name = text
-    ctx.reply(`提醒项的名称已被设定为 ${text}\n${this.replyText[this.step + 1]}\n回复“上一步”重新设置${this.stepName[this.step]}\n回复“取消”停止设置`)
-    this.step++
-  }
-
-  // 设置提醒内容步骤
-  setTextStep (text: string, ctx: Context): void {
-    this.text = text
-    ctx.replyWithMarkdown(`提醒项的内容已被设定为 ${text}\n${this.replyText[this.step + 1]}\n回复“上一步”重新设置${this.stepName[this.step]}\n回复“取消”停止设置`)
-    this.step++
-  }
-
-  // 设置提醒周期步骤
-  setCornStep (text: string, ctx: Context): void {
-    const result = cron.validate(text)
-    if (result) {
-      const nextRun = cronParser.parseExpression(text).next().toISOString()
-      ctx.reply(`提醒项的提醒周期已被设定为 ${text}\n下次提醒时间在 ${nextRun}\n回复“保存”保存设置\n回复“上一步”重新设置${this.stepName[this.step]}\n回复“取消”停止设置`)
-    } else {
-      ctx.reply(`cron 表达式解析错误，请重新设置\n回复“上一步”重新设置${this.stepName[this.step]}\n回复“取消”停止设置`)
-    }
-  }
-
-  // 收到消息后处理
-  nextStep (text: string, ctx: Context): void {
-    switch (this.step) {
-      case 0: this.setNameStep(text, ctx); break
-      case 1: this.setTextStep(text, ctx); break
-      case 2: this.setCornStep(text, ctx); break
-    }
-  }
-
-  // 返回上一步设置
-  prevStep (ctx: Context): void {
-    if (this.step === 0) {
-      ctx.reply('已经是第一步了')
-      return
-    }
-    this.step--
-    let replyText = '返回到了上一步\n'
-    replyText += this.replyText[this.step] + '\n'
-    if (this.step !== 0) {
-      replyText += `回复“上一步”重新设置${this.stepName[this.step - 1]}\n`
-    }
-    replyText += '回复“取消”停止设置'
-    ctx.reply(replyText)
-  }
-}
-
 const progressChatIdMap = new Map<number, SettingProgress>()
+
+// 验证配置文件的正确性
+async function verifyConfig (config: DrinkBotConfig, logger: Logger):Promise<boolean> {
+  logger.debug('开始校验配置文件正确性')
+  const { token, storeFile, httpsProxyAgent } = config as DrinkBotConfig
+  // 测试代理
+  if (httpsProxyAgent) {
+    try {
+      const res = await axios.get(`https://api.telegram.org/bot${token}/getMe`, { httpsAgent: httpsProxyAgent })
+      if (!res.data || !res.data.ok) {
+        logger.error('代理测试成功，但是返回错误')
+      }
+      logger.debug('代理测试成功')
+    } catch (e) {
+      let msg = ''
+      if (e instanceof Error) {
+        msg = e.message
+      }
+      if (msg === '') {
+        logger.warn('没有正确获取到错误类型')
+      }
+      logger.error('代理测试失败：' + msg)
+      return false
+    }
+  }
+  // 测试数据文件
+  try {
+    // 尝试读取
+    const content = fs.readFileSync(storeFile).toString()
+    JSON.parse(content) as Reminds
+    logger.debug('数据存储文件配置正确')
+  } catch (e) {
+    let msg = ''
+    if (e instanceof Error) {
+      msg = e.message
+    }
+    if (msg === '') {
+      logger.warn('没有正确获取到错误类型')
+    }
+    logger.error('数据存储文件配置不正确：' + msg)
+    return false
+  }
+  logger.debug('配置文件校验成功')
+  return true
+}
 
 async function main () {
   // 获取配置文件
@@ -127,24 +98,14 @@ async function main () {
     config = c
     logger.debug('配置文件获取成功')
   } catch (e) {
-    console.error(e)
+    logger.error('配置文件获取失败，请根据 config 文件夹中的 config.ts.example 创建 config.ts')
+    return
+  }
+  // 检查配置文件的正确性
+  if (!await verifyConfig(config, logger)) {
     return
   }
   const { token, storeFile, webhookUrl: webhookBaseUrl, httpsProxyAgent, notifyChatId } = config as DrinkBotConfig
-
-  // 测试代理
-  if (httpsProxyAgent) {
-    try {
-      const res = await axios.get(`https://api.telegram.org/bot${token}/getMe`, { httpsAgent: httpsProxyAgent })
-      if (!res.data || !res.data.ok) {
-        logger.error('代理测试成功，但是返回错误')
-      }
-      logger.debug('代理测试成功')
-    } catch (e) {
-      logger.error(e)
-      return
-    }
-  }
 
   const bot = new Telegraf(token, {
     telegram: {
@@ -159,12 +120,12 @@ async function main () {
 
   bot.command('help', (ctx) => {
     console.log('received command /help')
-    ctx.reply('下面是可以使用的命令：\n/start 开始为你或这个群组设置提醒项\n/import 导入提醒项\n/edit 修改提醒项\n/info 显示相关信息\n/help 显示此信息')
+    ctx.reply('下面是柠喵要开发的命令：\n/start 开始为你或这个群组设置提醒项（已经可用）\n/import 导入提醒项\n/edit 修改提醒项\n/info 显示相关信息（已经可用）\n/help 显示此信息（已经可用）')
   })
 
   bot.command('start', (ctx) => {
     console.log('received command /start')
-    progressChatIdMap.set(ctx.chat.id, new SettingProgress(ctx.chat.id))
+    progressChatIdMap.set(ctx.chat.id, new SettingProgress(ctx.chat.id, storeFile, logger))
     ctx.reply('开始设置，请为你的提醒项起一个名称，或回复“取消”停止设置')
   })
 
@@ -189,14 +150,33 @@ async function main () {
           progressChatIdMap.delete(id)
           ctx.reply('已经取消设置过程')
         } else {
-          ctx.reply(text)
+          ctx.reply('没有在设置过程中，回复“取消”是无效的')
         }
         break
       case '上一步':
         if (progress) {
           progress.prevStep(ctx)
         } else {
-          ctx.reply(text)
+          ctx.reply('没有在设置过程中，回复“上一步”是无效的')
+        }
+        break
+      case '保存':
+        if (progress) {
+          const success = progress.save()
+          if (typeof success === 'boolean' && success) {
+            ctx.reply('成功的保存了你的提醒项')
+            progressChatIdMap.delete(ctx.chat.id)
+          } else if (typeof success === 'string') {
+            // 保存时出错
+            // 如果配置了提醒 ID，就发送错误提示
+            if (notifyChatId) {
+              bot.telegram.sendMessage(notifyChatId, `为 ChatID [${ctx.chat.id}] 保存提醒项时出错：${success}`)
+            }
+            // 告诉用户失败了
+            ctx.reply('保存提醒项失败，可能是发生了什么错误\n回复“上一步”重新设置提醒周期\n回复“取消”停止设置')
+          }
+        } else {
+          ctx.reply('没有在设置过程中，回复“保存”是无效的')
         }
         break
       default:
@@ -205,7 +185,7 @@ async function main () {
           progress.nextStep(text, ctx)
         } else {
           // 不在，复读
-          ctx.reply(text)
+          ctx.reply('我是一个没有感情的提醒机器人，没事不要和我说话，说话我也只会回复这么一句。')
         }
         break
     }

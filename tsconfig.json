@@ -7,9 +7,6 @@
     "strict": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "moduleResolution": "Node",
-    "types": [
-      "telegraf/typings"
-    ]
+    "moduleResolution": "Node"
   }
 }

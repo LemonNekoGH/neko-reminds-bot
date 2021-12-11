@@ -6,6 +6,7 @@ import { DrinkBotConfig } from '../config/type'
 import axios from 'axios'
 import log4js, { Logger } from 'log4js'
 import { SettingProgress } from './SettingProgress'
+import { NotifyTaskManager } from './NotifyTaskManager'
 
 export interface RemindItem {
     text: string
@@ -112,7 +113,10 @@ async function main () {
       agent: httpsProxyAgent
     }
   })
-
+  // 初始化任务管理器
+  const taskManager = new NotifyTaskManager(bot, logger)
+  taskManager.initOrUpdateTasks(storeFile)
+  // 初始化 bot 指令
   bot.command('info', (ctx) => {
     console.log('received command /info')
     ctx.replyWithMarkdown(`我是柠喵的提醒喝水小助手，不止提醒喝水哦。\n目前状态不稳定，可能会出现丢失配置、没有回复的情况。\n[GitHub](https://github.com/LemonNekoGH/neko-time-to-drink-bot)\n版本号 \`${packageJson.version}\``)
@@ -164,8 +168,11 @@ async function main () {
         if (progress) {
           const success = progress.save()
           if (typeof success === 'boolean' && success) {
+            // 保存成功，告诉当前用户
             ctx.reply('成功的保存了你的提醒项')
             progressChatIdMap.delete(ctx.chat.id)
+            // 然后更新任务管理器
+            taskManager.initOrUpdateTasks(storeFile)
           } else if (typeof success === 'string') {
             // 保存时出错
             // 如果配置了提醒 ID，就发送错误提示

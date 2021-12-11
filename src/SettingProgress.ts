@@ -4,6 +4,7 @@ import cronParser from 'cron-parser'
 import { RemindItem, Reminds } from '.'
 import fs from 'fs'
 import { Logger } from 'log4js'
+import moment from 'moment'
 
 // 设置过程实体类
 export class SettingProgress {
@@ -53,7 +54,7 @@ export class SettingProgress {
     const result = cron.validate(text)
     if (result) {
       this.cron = text
-      const nextRun = cronParser.parseExpression(text).next().toISOString()
+      const nextRun = moment(cronParser.parseExpression(text).next().toISOString()).format('YYYY-MM-DD hh:mm:ss')
       ctx.reply(`提醒项的提醒周期已被设定为 ${text}\n下次提醒时间在 ${nextRun}\n回复“保存”保存设置\n回复“上一步”重新设置${this.stepName[this.step]}\n回复“取消”停止设置`)
     } else {
       ctx.reply(`cron 表达式解析错误，请重新设置\n回复“上一步”重新设置${this.stepName[this.step]}\n回复“取消”停止设置`)

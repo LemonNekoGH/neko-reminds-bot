@@ -20,7 +20,6 @@ export class NotifyTaskManager {
     // @params storeFile 提醒存储文件
     initOrUpdateTasks: (storeFile: string) => void = (storeFile) => {
       this.logger.info('开始初始化/更新提醒任务')
-      this.taskMap = new Map()
       // 读取存储文件
       let fileContent: Reminds | undefined
       try {
@@ -59,6 +58,7 @@ export class NotifyTaskManager {
       for (const chatId in reminds) {
         const remindsForChat = reminds[chatId]
         let tasksForChat = this.taskMap.get(parseInt(chatId))
+        this.logger.debug(`正在检查提醒项有没有被加入任务 chatid: ${chatId}, added: ${typeof tasksForChat === 'object'}`)
         if (!tasksForChat) {
           // 这个聊天的提醒项没有被加入任务
           this.logger.debug(`这个聊天的提醒项都没有被加入任务 chatid: ${chatId}`)
@@ -70,6 +70,7 @@ export class NotifyTaskManager {
             tasksForChat.set(name, task)
           }
           this.taskMap.set(parseInt(chatId), tasksForChat)
+          this.logger.debug(`任务已加入 chatid: ${chatId}`)
         } else {
           // 检查聊天有没有新的提醒项
           for (const name in remindsForChat) {

@@ -1,4 +1,4 @@
-import { Context } from 'telegraf'
+import { Context, Markup } from 'telegraf'
 import cron from 'node-cron'
 import cronParser from 'cron-parser'
 import { RemindItem, Reminds } from '.'
@@ -22,7 +22,7 @@ export class SettingProgress {
   replyText: string[] = [
     '请设置提醒项的名称',
     '请设置要提醒的内容',
-    '请设置提醒周期：一个 [cron 表达式](https://zh.wikipedia.org/wiki/Cron)'
+    '请设置提醒周期: 一个 [cron 表达式](https://zh.wikipedia.org/wiki/Cron)'
   ];
 
   // 提醒设置所在的文件
@@ -38,14 +38,22 @@ export class SettingProgress {
   // 设置提醒名步骤
   setNameStep (text: string, ctx: Context): void {
     this.name = text
-    ctx.reply(`提醒项的名称已被设定为 ${text}\n${this.replyText[this.step + 1]}\n回复“上一步”重新设置${this.stepName[this.step]}\n回复“取消”停止设置`)
+    let callbackBtns = [Markup.button.callback('取消设置', 'cancel_setting')]
+    if (this.step !== 0) {
+      callbackBtns = [Markup.button.callback(`重新设置${this.stepName[this.step - 1]}`, 'prev_step_setting'), ...callbackBtns]
+    }
+    ctx.reply(`提醒项的名称已被设定为 ${text}\n${this.replyText[this.step + 1]}`, Markup.inlineKeyboard([callbackBtns]))
     this.step++
   }
 
   // 设置提醒内容步骤
   setTextStep (text: string, ctx: Context): void {
     this.text = text
-    ctx.replyWithMarkdown(`提醒项的内容已被设定为 ${text}\n${this.replyText[this.step + 1]}\n回复“上一步”重新设置${this.stepName[this.step]}\n回复“取消”停止设置`)
+    let callbackBtns = [Markup.button.callback('取消设置', 'cancel_setting')]
+    if (this.step !== 0) {
+      callbackBtns = [Markup.button.callback(`重新设置${this.stepName[this.step - 1]}`, 'prev_step_setting'), ...callbackBtns]
+    }
+    ctx.replyWithMarkdown(`提醒项的内容已被设定为 ${text}\n${this.replyText[this.step + 1]}`, Markup.inlineKeyboard([callbackBtns]))
     this.step++
   }
 
@@ -55,9 +63,16 @@ export class SettingProgress {
     if (result) {
       this.cron = text
       const nextRun = moment(cronParser.parseExpression(text).next().toISOString()).format('YYYY-MM-DD hh:mm:ss')
-      ctx.reply(`提醒项的提醒周期已被设定为 ${text}\n下次提醒时间在 ${nextRun}\n回复“保存”保存设置\n回复“上一步”重新设置${this.stepName[this.step]}\n回复“取消”停止设置`)
+      ctx.reply(`提醒项的提醒周期已被设定为 ${text}\n下次提醒时间在 ${nextRun}`, Markup.inlineKeyboard([
+        [Markup.button.callback('保存设置', 'save_setting')],
+        [Markup.button.callback('重新设置提醒项内容', 'prev_step_setting')],
+        [Markup.button.callback('取消设置', 'cancel_setting')]
+      ]))
     } else {
-      ctx.reply(`cron 表达式解析错误，请重新设置\n回复“上一步”重新设置${this.stepName[this.step]}\n回复“取消”停止设置`)
+      ctx.reply('cron 表达式解析错误，请重新设置', Markup.inlineKeyboard([
+        [Markup.button.callback('重新设置提醒项内容', 'prev_step_setting')],
+        [Markup.button.callback('取消设置', 'cancel_setting')]
+      ]))
     }
   }
 
@@ -78,13 +93,13 @@ export class SettingProgress {
     }
     this.step--
     let replyText = '返回到了上一步\n'
-    replyText += this.replyText[this.step] + '\n'
+    replyText += this.replyText[this.step]
+    let callbackBtns = [Markup.button.callback('取消设置', 'cancel_setting')]
     if (this.step !== 0) {
-      replyText += `回复“上一步”重新设置${this.stepName[this.step - 1]}\n`
+      callbackBtns = [Markup.button.callback(`重新设置${this.stepName[this.step - 1]}`, 'prev_step_setting'), ...callbackBtns]
     }
-    replyText += '回复“取消”停止设置'
     this.logger.debug(`返回到了上一步：设置${this.stepName[this.step]}`)
-    ctx.reply(replyText)
+    ctx.reply(replyText, Markup.inlineKeyboard([callbackBtns]))
   }
 
   // 保存设置到文件中

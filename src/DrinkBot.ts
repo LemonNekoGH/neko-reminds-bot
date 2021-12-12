@@ -1,5 +1,5 @@
 import { Logger } from 'log4js'
-import { Telegraf } from 'telegraf'
+import { Markup, Telegraf } from 'telegraf'
 import { DrinkBotConfig } from '../config'
 import { NotifyTaskManager } from './NotifyTaskManager'
 import { SettingProgress } from './SettingProgress'
@@ -25,6 +25,8 @@ export class DrinkBot {
       this.settingProgressChatIdMap = new Map()
       this.taskManager = new NotifyTaskManager(this.bot, this.logger)
       this.taskManager.initOrUpdateTasks(this.config.storeFile)
+
+      this.initBot()
     }
 
     // 初始化 bot 相关设置
@@ -43,10 +45,11 @@ export class DrinkBot {
         ctx.reply('下面是柠喵要开发的命令：\n/start 开始为你或这个群组设置提醒项（已经可用）\n/import 导入提醒项\n/edit 修改提醒项\n/info 显示相关信息（已经可用）\n/help 显示此信息（已经可用）')
       })
 
-      bot.command('start', (ctx) => {
+      bot.command('start', async (ctx) => {
         console.log('received command /start')
         progressChatIdMap.set(ctx.chat.id, new SettingProgress(ctx.chat.id, storeFile, logger))
-        ctx.reply('开始设置，请为你的提醒项起一个名称，或回复“取消”停止设置')
+        const inlineBtns = Markup.inlineKeyboard([[Markup.button.callback('取消设置', 'cancel_setting')]])
+        ctx.reply('开始设置，请为你的提醒项起一个名称', inlineBtns)
       })
 
       bot.command('edit', (ctx) => {
@@ -59,58 +62,79 @@ export class DrinkBot {
         ctx.reply('还不能导入配置')
       })
 
+      // 取消设置过程
+      bot.action('cancel_setting', (ctx) => {
+        if (!ctx.chat) {
+          return
+        }
+        const { id } = ctx.chat
+        const progress = progressChatIdMap.get(id)
+        if (progress) {
+          progressChatIdMap.delete(id)
+          ctx.reply('已经取消设置过程')
+        } else {
+          ctx.reply('请不要点击最后一条信息之前的按钮')
+        }
+        ctx.answerCbQuery()
+      })
+
+      // 返回上一步设置
+      bot.action('prev_step_setting', (ctx) => {
+        if (!ctx.chat) {
+          return
+        }
+        const { id } = ctx.chat
+        const progress = progressChatIdMap.get(id)
+        if (progress) {
+          progress.prevStep(ctx)
+        } else {
+          ctx.reply('请不要点击最后一条信息之前的按钮')
+        }
+        ctx.answerCbQuery()
+      })
+
+      // 保存设置
+      bot.action('save_setting', (ctx) => {
+        if (!ctx.chat) {
+          return
+        }
+        const { id } = ctx.chat
+        const progress = progressChatIdMap.get(id)
+        if (progress) {
+          const success = progress.save()
+          if (typeof success === 'boolean' && success) {
+            // 保存成功，告诉当前用户
+            ctx.reply('成功的保存了刚刚设置的提醒项')
+            progressChatIdMap.delete(ctx.chat.id)
+            // 然后更新任务管理器
+            taskManager.initOrUpdateTasks(storeFile)
+          } else if (typeof success === 'string') {
+            // 保存时出错
+            // 如果配置了提醒 ID，就发送错误提示
+            if (notifyChatId) {
+              bot.telegram.sendMessage(notifyChatId, `为 ChatID [${ctx.chat.id}] 保存提醒项时出错：${success}`)
+            }
+            // 告诉用户失败了
+            ctx.reply('保存提醒项失败，可能是发生了什么错误，这个问题已经同时反馈给了柠喵')
+          }
+        } else {
+          ctx.reply('请不要点击最后一条信息之前的按钮')
+        }
+        ctx.answerCbQuery()
+      })
+
+      // 收到普通消息时
       bot.on('text', (ctx) => {
         const { text } = ctx.message
         const { id } = ctx.chat
         const progress = progressChatIdMap.get(id)
 
-        switch (text) {
-          case '取消':
-            if (progress) {
-              progressChatIdMap.delete(id)
-              ctx.reply('已经取消设置过程')
-            } else {
-              ctx.reply('没有在设置过程中，回复“取消”是无效的')
-            }
-            break
-          case '上一步':
-            if (progress) {
-              progress.prevStep(ctx)
-            } else {
-              ctx.reply('没有在设置过程中，回复“上一步”是无效的')
-            }
-            break
-          case '保存':
-            if (progress) {
-              const success = progress.save()
-              if (typeof success === 'boolean' && success) {
-                // 保存成功，告诉当前用户
-                ctx.reply('成功的保存了你的提醒项')
-                progressChatIdMap.delete(ctx.chat.id)
-                // 然后更新任务管理器
-                taskManager.initOrUpdateTasks(storeFile)
-              } else if (typeof success === 'string') {
-                // 保存时出错
-                // 如果配置了提醒 ID，就发送错误提示
-                if (notifyChatId) {
-                  bot.telegram.sendMessage(notifyChatId, `为 ChatID [${ctx.chat.id}] 保存提醒项时出错：${success}`)
-                }
-                // 告诉用户失败了
-                ctx.reply('保存提醒项失败，可能是发生了什么错误\n回复“上一步”重新设置提醒周期\n回复“取消”停止设置')
-              }
-            } else {
-              ctx.reply('没有在设置过程中，回复“保存”是无效的')
-            }
-            break
-          default:
-            if (progress) {
-              // 不是特定的指令，判断是否正在设置过程
-              progress.nextStep(text, ctx)
-            } else {
-              // 不在，复读
-              ctx.reply('我是一个没有感情的提醒机器人，没事不要和我说话，说话我也只会回复这么一句。')
-            }
-            break
+        if (progress) {
+          // 不是特定的指令，判断是否正在设置过程
+          progress.nextStep(text, ctx)
+        } else {
+          // 不在，复读
+          ctx.reply('我是一个没有感情的提醒机器人，没事不要和我说话，说话我也只会回复这么一句。')
         }
       })
     }

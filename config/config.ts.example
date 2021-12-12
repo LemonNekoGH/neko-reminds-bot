@@ -1,8 +1,8 @@
 import HttpsProxyAgent from 'https-proxy-agent/dist/agent'
 import path from 'path'
-import { DrinkBotConfig } from './type'
+import { IDrinkBotConfig } from './type'
 
-export const config: DrinkBotConfig = {
+export const config: IDrinkBotConfig = {
   token: '1234567890:AbCdEfGhIjKlMnOpqRsTuVwXyz-01234567',
   storeFile: path.resolve('../testStore.json'),
   httpsProxyAgent: new HttpsProxyAgent('http://localhost:7890'),

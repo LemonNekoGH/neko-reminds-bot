@@ -97,7 +97,7 @@ export class SettingProgress {
       const fileContent = fs.readFileSync(this.storeFile).toString()
       const dataObj = JSON.parse(fileContent) as Reminds
       let remindItemsForChatId = dataObj[this.chatId]
-      // 需要这个 ChatID 是否从来没有设置过提醒项
+      // 检查这个 ChatID 是否从来没有设置过提醒项
       if (remindItemsForChatId) {
         remindItemsForChatId[this.name] = remindItem
       } else {

@@ -5,6 +5,7 @@ import { NotifyTaskManager } from './NotifyTaskManager'
 import { SettingProgress } from './SettingProgress'
 import packageJson from '../package.json'
 import express from 'express'
+import { EditProgress } from './EditProgress'
 
 // 喝水 Bot 实例
 export class DrinkBot {
@@ -13,6 +14,7 @@ export class DrinkBot {
     logger: Logger
     taskManager: NotifyTaskManager
     settingProgressChatIdMap: Map<number, SettingProgress>
+    editProgressChatIdMap: Map<number, EditProgress>
 
     constructor (config: DrinkBotConfig, logger: Logger) {
       this.config = config
@@ -22,7 +24,10 @@ export class DrinkBot {
           agent: this.config.httpsProxyAgent
         }
       })
+      // 初始化设置过程，修改过程集合
       this.settingProgressChatIdMap = new Map()
+      this.editProgressChatIdMap = new Map()
+
       this.taskManager = new NotifyTaskManager(this.bot, this.logger)
       this.taskManager.initOrUpdateTasks(this.config.storeFile)
 
@@ -36,29 +41,32 @@ export class DrinkBot {
 
       // 初始化 bot 指令
       bot.command('info', (ctx) => {
-        console.log('received command /info')
+        logger.info('收到 info 指令')
         ctx.replyWithMarkdown(`我是柠喵的提醒喝水小助手，不止提醒喝水哦。\n目前状态不稳定，可能会出现丢失配置、没有回复的情况。\n[GitHub](https://github.com/LemonNekoGH/neko-time-to-drink-bot)\n版本号 \`${packageJson.version}\``)
       })
 
       bot.command('help', (ctx) => {
-        console.log('received command /help')
-        ctx.reply('下面是柠喵要开发的命令：\n/start 开始为你或这个群组设置提醒项（已经可用）\n/import 导入提醒项\n/edit 修改提醒项\n/info 显示相关信息（已经可用）\n/help 显示此信息（已经可用）')
+        logger.info('收到 help 指令')
+        ctx.reply('下面是柠喵要开发的命令: \n/start 开始为你或这个群组设置提醒项（已经可用）\n/import 导入提醒项\n/edit 修改提醒项\n/info 显示相关信息（已经可用）\n/help 显示此信息（已经可用）')
       })
 
       bot.command('start', async (ctx) => {
-        console.log('received command /start')
+        logger.info('收到 start 指令')
         progressChatIdMap.set(ctx.chat.id, new SettingProgress(ctx.chat.id, storeFile, logger))
         const inlineBtns = Markup.inlineKeyboard([[Markup.button.callback('取消设置', 'cancel_setting')]])
         ctx.reply('开始设置，请为你的提醒项起一个名称', inlineBtns)
       })
 
       bot.command('edit', (ctx) => {
-        console.log('received command /edit')
-        ctx.reply('还不能修改提醒项')
+        logger.info('收到 edit 指令')
+        const progress = new EditProgress(bot, logger, this.config, ctx.chat.id)
+        if (progress.showAllItemName()) {
+          this.editProgressChatIdMap.set(ctx.chat.id, progress)
+        }
       })
 
       bot.command('import', (ctx) => {
-        console.log('received command /import')
+        logger.info('收到 import 指令')
         ctx.reply('还不能导入配置')
       })
 
@@ -123,15 +131,42 @@ export class DrinkBot {
         ctx.answerCbQuery()
       })
 
+      // 修改提醒项名称
+      bot.action('name_edit', (ctx) => {
+        if (!ctx.chat) {
+          return
+        }
+        const { id } = ctx.chat
+        const progress = this.editProgressChatIdMap.get(id)
+        if (progress) {
+          // 在修改过程中
+
+        } else {
+          // 不在修改过程中
+          ctx.reply('没有在修改过程中')
+        }
+        ctx.answerCbQuery()
+      })
+
       // 收到普通消息时
       bot.on('text', (ctx) => {
         const { text } = ctx.message
         const { id } = ctx.chat
         const progress = progressChatIdMap.get(id)
+        const editProgress = this.editProgressChatIdMap.get(id)
 
         if (progress) {
-          // 不是特定的指令，判断是否正在设置过程
+          // 在设置过程
           progress.nextStep(text, ctx)
+        } else if (editProgress) {
+          // 在编辑过程
+          if (text === '取消') {
+            this.logger.info('取消了编辑过程 chatid: ' + id)
+            this.editProgressChatIdMap.delete(id)
+            ctx.reply('取消了编辑过程', Markup.removeKeyboard())
+          } else {
+            editProgress.receivedText(text)
+          }
         } else {
           // 不在，复读
           ctx.reply('我是一个没有感情的提醒机器人，没事不要和我说话，说话我也只会回复这么一句。')

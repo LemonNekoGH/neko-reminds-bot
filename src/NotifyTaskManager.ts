@@ -65,9 +65,11 @@ export class NotifyTaskManager {
           tasksForChat = new Map()
           for (const name in remindsForChat) {
             const remindItem = remindsForChat[name]
-            const task = new NotifyTask(parseInt(chatId), name, remindItem, this.bot, this.logger)
-            task.start()
-            tasksForChat.set(name, task)
+            if (remindItem) {
+              const task = new NotifyTask(parseInt(chatId), name, remindItem, this.bot, this.logger)
+              task.start()
+              tasksForChat.set(name, task)
+            }
           }
           this.taskMap.set(parseInt(chatId), tasksForChat)
           this.logger.debug(`任务已加入 chatid: ${chatId}`)
@@ -77,10 +79,12 @@ export class NotifyTaskManager {
             const remindItem = remindsForChat[name]
             if (!tasksForChat.get(name)) {
               // 有新的提醒项
-              const task = new NotifyTask(parseInt(chatId), name, remindItem, this.bot, this.logger)
-              task.start()
-              tasksForChat.set(name, task)
-              this.logger.debug(`已添加 chatid: ${chatId}, name: ${name}`)
+              if (remindItem) {
+                const task = new NotifyTask(parseInt(chatId), name, remindItem, this.bot, this.logger)
+                task.start()
+                tasksForChat.set(name, task)
+                this.logger.debug(`已添加 chatid: ${chatId}, name: ${name}`)
+              }
             }
           }
         }

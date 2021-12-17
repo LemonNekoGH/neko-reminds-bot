@@ -283,7 +283,7 @@ export class DrinkBot {
           }
         } else {
           // 不在，复读
-          ctx.reply('我是一个没有感情的提醒机器人，没事不要和我说话，说话我也只会回复这么一句。')
+          ctx.reply('我是一个没有感情的提醒机器人，没事不要和我说话，说话我也只会回复这么一句。', Markup.removeKeyboard())
         }
       })
     }

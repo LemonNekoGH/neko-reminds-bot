@@ -4,7 +4,7 @@ import fs from 'fs'
 // 把提醒项保存到文件中
 export const saveToStoreFile: (reminds: Reminds, storeFile: string) => (Error | null) = (remind, storeFile) => {
   try {
-    fs.writeFileSync(JSON.stringify(remind, undefined, '  '), storeFile)
+    fs.writeFileSync(storeFile, JSON.stringify(remind, undefined, '  '))
   } catch (e) {
     return e as Error
   }

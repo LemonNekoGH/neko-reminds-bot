@@ -58,7 +58,9 @@ export class EditProgress {
     }
     const replyKeyboard: ReturnType<typeof Markup.button.text>[][] = []
     keys.forEach(it => {
-      replyKeyboard.push([Markup.button.text(it)])
+      if (remindsForChat[it]) {
+        replyKeyboard.push([Markup.button.text(it)])
+      }
     })
     replyKeyboard.push([Markup.button.text('取消')])
     this.bot.telegram.sendMessage(this.chatId, '请回复要修改的提醒项名称', Markup.keyboard(replyKeyboard).resize())
@@ -75,7 +77,7 @@ export class EditProgress {
         this.stepEditName(text)
         break
       case 3:
-        this.stepEditText(text)
+        this.stepEditCron(text)
         break
       case 4:
         this.stepEditText(text)
@@ -162,7 +164,7 @@ export class EditProgress {
       btnLine2.push(Markup.button.callback('保存修改', 'save_edit'))
     }
     btnLine2.push(Markup.button.callback('取消修改', 'cancel_edit'))
-    this.bot.telegram.sendMessage(this.chatId, `提醒项周期修改成了 ${this.newRemindItem.cron}\n下次提醒时间在: ${moment(cronParser.parseExpression(text).next().toString()).format('YYYY-MM-DD hh:mm:ss')}\n请选择要修改的字段`, Markup.inlineKeyboard([
+    this.bot.telegram.sendMessage(this.chatId, `提醒项周期修改成了 ${this.newRemindItem.cron}\n下次提醒时间在: ${moment(cronParser.parseExpression(text).next().toISOString()).format('YYYY-MM-DD hh:mm:ss')}\n请选择要修改的字段`, Markup.inlineKeyboard([
       [Markup.button.callback('名称', 'name_edit'), Markup.button.callback('提醒内容', 'text_edit'), Markup.button.callback('提醒周期', 'cron_edit')],
       btnLine2
     ]))
@@ -220,7 +222,7 @@ export class EditProgress {
   saveEdit: () => boolean = () => {
     if (this.nowStep === 0 || !this.remindItem || !this.newRemindItem) {
       this.logger.error(`选择要修改的提醒项过程中收到了保存指令 chatid: ${this.chatId}`)
-      this.bot.telegram.sendMessage(this.chatId, '你还在选择要修改的提醒项，没有进行任何修改')
+      this.bot.telegram.sendMessage(this.chatId, '你还在选择要修改的提醒项，没有进行任何修改，所以不需要保存')
       return false
     }
     const { notifyChatId: notifyId } = this.config

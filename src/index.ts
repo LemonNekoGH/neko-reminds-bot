@@ -12,7 +12,7 @@ export interface Reminds {
   // ChatID
   [p: number]: {
     // 名字对应提醒项
-    [p: string]: RemindItem
+    [p: string]: RemindItem | null
   }
 }
 

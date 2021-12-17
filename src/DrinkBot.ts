@@ -1,5 +1,5 @@
 import { Logger } from 'log4js'
-import { Markup, Telegraf } from 'telegraf'
+import { Context, Markup, Telegraf } from 'telegraf'
 import { DrinkBotConfig } from '../config'
 import { NotifyTaskManager } from './NotifyTaskManager'
 import { SettingProgress } from './SettingProgress'
@@ -62,6 +62,8 @@ export class DrinkBot {
         const progress = new EditProgress(bot, logger, this.config, ctx.chat.id)
         if (progress.showAllItemName()) {
           this.editProgressChatIdMap.set(ctx.chat.id, progress)
+        } else {
+          ctx.reply('没有找到为这个对话设置的提醒项')
         }
       })
 
@@ -140,12 +142,124 @@ export class DrinkBot {
         const progress = this.editProgressChatIdMap.get(id)
         if (progress) {
           // 在修改过程中
-
+          progress.nowStep = 2
+          ctx.reply('请回复新的名称', Markup.inlineKeyboard([[Markup.button.callback('返回', 'reselect_content_edit')], [Markup.button.callback('取消', 'cancel_edit')]]))
         } else {
           // 不在修改过程中
           ctx.reply('没有在修改过程中')
         }
         ctx.answerCbQuery()
+      })
+
+      // 修改提醒项内容
+      bot.action('text_edit', (ctx) => {
+        if (!ctx.chat) {
+          return
+        }
+        const { id } = ctx.chat
+        const progress = this.editProgressChatIdMap.get(id)
+        if (progress) {
+          // 在修改过程中
+          progress.nowStep = 4
+          ctx.reply('请回复新的内容', Markup.inlineKeyboard([[Markup.button.callback('返回', 'reselect_content_edit')], [Markup.button.callback('取消', 'cancel_edit')]]))
+        } else {
+          // 不在修改过程中
+          ctx.reply('没有在修改过程中')
+        }
+        ctx.answerCbQuery()
+      })
+
+      // 修改提醒项周期
+      bot.action('cron_edit', (ctx) => {
+        if (!ctx.chat) {
+          return
+        }
+        const { id } = ctx.chat
+        const progress = this.editProgressChatIdMap.get(id)
+        if (progress) {
+          // 在修改过程中
+          progress.nowStep = 3
+          ctx.reply('请回复新的提醒周期', Markup.inlineKeyboard([[Markup.button.callback('返回', 'reselect_content_edit')], [Markup.button.callback('取消', 'cancel_edit')]]))
+        } else {
+          // 不在修改过程中
+          ctx.reply('没有在修改过程中')
+        }
+        ctx.answerCbQuery()
+      })
+
+      // 返回到选择要修改的字段
+      bot.action('reselect_content_edit', (ctx) => {
+        if (!ctx.chat) {
+          return
+        }
+        const { id } = ctx.chat
+        const progress = this.editProgressChatIdMap.get(id)
+        if (progress) {
+          // 在修改过程中
+          progress.nowStep = 1
+          const { prevName, name, remindItem, newRemindItem } = progress
+          if (!remindItem || !newRemindItem) {
+            this.logger.debug('可能还没有选择要修改的提醒项')
+          } else {
+            this.logger.debug(`返回到选择要修改的字段 chatid: ${id}`)
+            const btnLine2: ReturnType<typeof Markup.button.callback>[] = []
+            if (name !== prevName || remindItem.cron !== newRemindItem.cron || remindItem.text !== newRemindItem.text) {
+              // 有项目被修改了，加入保存按钮
+              btnLine2.push(Markup.button.callback('保存修改', 'save_edit'))
+            }
+            btnLine2.push(Markup.button.callback('取消修改', 'cancel_edit'))
+            ctx.reply('请选择要修改的字段', Markup.inlineKeyboard([
+              [Markup.button.callback('名称', 'name_edit'), Markup.button.callback('提醒内容', 'text_edit'), Markup.button.callback('提醒周期', 'cron_edit')],
+              btnLine2
+            ]))
+          }
+        } else {
+          // 不在修改过程中
+          ctx.reply('没有在修改过程中')
+        }
+        ctx.answerCbQuery()
+      })
+
+      // 返回到选择要修改的提醒项
+      bot.action('reselect_item_edit', (ctx) => {
+        if (!ctx.chat) {
+          return
+        }
+        const { id } = ctx.chat
+        const progress = this.editProgressChatIdMap.get(id)
+        if (progress) {
+          // 在修改过程中
+          progress.nowStep = 0
+          if (!progress.showAllItemName()) {
+            // 显示所有提醒项时发现提醒项无了
+            ctx.reply('找不到为这个对话设置的提醒项，已取消修改')
+            this.editProgressChatIdMap.delete(id)
+          }
+        } else {
+          // 不在修改过程中
+          ctx.reply('没有在修改过程中')
+        }
+        ctx.answerCbQuery()
+      })
+
+      // 取消修改过程
+      bot.action('cancel_edit', (ctx) => {
+        this.requireActionInEditProgress(ctx, (ctx, progress) => {
+          this.editProgressChatIdMap.delete(ctx.chat!.id)
+          ctx.reply('已取消修改过程')
+        })
+      })
+
+      // 保存修改
+      bot.action('save_edit', (ctx) => {
+        this.requireActionInEditProgress(ctx, (ctx, progress) => {
+          const success = progress.saveEdit()
+          if (success) {
+            ctx.reply('成功的保存了修改')
+            this.editProgressChatIdMap.delete(ctx.chat!.id)
+            taskManager.initOrUpdateTasks(this.config.storeFile)
+          }
+        })
       })
 
       // 收到普通消息时
@@ -172,6 +286,22 @@ export class DrinkBot {
           ctx.reply('我是一个没有感情的提醒机器人，没事不要和我说话，说话我也只会回复这么一句。')
         }
       })
+    }
+
+    requireActionInEditProgress: (ctx: Context, fn: (ctx: Context, progress: EditProgress) => void) => void = (ctx, fn) => {
+      if (!ctx.chat) {
+        return
+      }
+      const { id } = ctx.chat
+      const progress = this.editProgressChatIdMap.get(id)
+      if (progress) {
+        // 在修改过程中
+        fn(ctx, progress)
+      } else {
+        // 不在修改过程中
+        ctx.reply('没有在修改过程中')
+      }
+      ctx.answerCbQuery()
     }
 
     // 启动 bot

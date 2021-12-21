@@ -21,6 +21,7 @@ A robot that will remind you to ______
 - 被麻匪给劫了
 - 遭遇电信诈骗
 - Bot 提醒你色色
+- 大都会过不了闸
 - 香港记者向你提问
 - 被面试官说 naive
 - 饮料洒在了键盘上

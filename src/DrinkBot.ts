@@ -262,6 +262,12 @@ export class DrinkBot {
         })
       })
 
+      // 收到贴纸时
+      bot.on('sticker', (ctx) => {
+        this.logger.info(`收到一张贴纸 chatid: ${ctx.chat.id} file_id: ${ctx.message.sticker.file_id}`)
+        ctx.replyWithSticker('CAACAgUAAxkBAAMOYcFsMtq39HunVGzbeL5zPR7xidkAAssEAAK_K_hXVdVhDHMJpAkjBA')
+      })
+
       // 收到普通消息时
       bot.on('text', (ctx) => {
         const { text } = ctx.message

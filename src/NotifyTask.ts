@@ -7,14 +7,14 @@ import moment from 'moment'
 
 // 提醒任务实例
 export class NotifyTask {
-    private chatId: number;
-    private name: string;
-    private cronExp: string;
-    private notifyStr: string;
-    private parsedCron: CronExpression;
-    private task: cron.ScheduledTask;
-    private bot: Telegraf;
-    private logger: log4js.Logger;
+    private chatId: number
+    private name: string
+    private cronExp: string
+    private notifyStr: string
+    private parsedCron: CronExpression
+    private task: cron.ScheduledTask
+    private bot: Telegraf
+    private logger: log4js.Logger
 
     constructor (chatId: number, name: string, remindItem: RemindItem, bot: Telegraf, logger: log4js.Logger) {
       this.chatId = chatId
@@ -37,7 +37,7 @@ export class NotifyTask {
       } catch (e) {
         this.logger.error('提醒发送失败')
       }
-    };
+    }
 
     // 更新提醒项内容
     updateRemindItem: (remindItem: RemindItem) => void = (item) => {
@@ -51,19 +51,19 @@ export class NotifyTask {
       this.task = cron.schedule(this.cronExp, this.taskContent, { scheduled: false })
       // 开始任务
       this.start()
-    };
+    }
 
     // 启动任务
     start: () => void = () => {
       this.task.start()
       this.logger.debug(`已启动提醒任务 chatid: ${this.chatId}, name: ${this.name}, 下次提醒时间: ${moment(this.parsedCron.next().toISOString()).format('YYYY-MM-DD hh:mm:ss')}`)
-    };
+    }
 
     // 停止任务
     stop: () => void = () => {
       this.task.stop()
       this.logger.debug(`已停止提醒任务 chatid: ${this.chatId}, name: ${this.name}`)
-    };
+    }
 
     // 检查是否与指定提醒项相同
     equalsTo: (item: RemindItem) => boolean = (item) => {

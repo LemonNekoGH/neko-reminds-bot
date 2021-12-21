@@ -16,7 +16,8 @@ module.exports = {
   ],
   rules: {
     '@typescript-eslint/no-unused-vars': 'warn',
-    'no-unused-vars': 'warn'
+    semi: 'off',
+    '@typescript-eslint/semi': ['error', 'never']
   },
   ignorePatterns: [
     'node_modules',

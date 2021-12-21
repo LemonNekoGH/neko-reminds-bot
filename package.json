@@ -1,6 +1,6 @@
 {
   "name": "neko-time-to-drink-bot",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A robot that will remind you to ____",
   "main": "index.js",
   "repository": "https://github.com/LemonNekoGH/neko-time-to-drink-bot.git",

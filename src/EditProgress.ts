@@ -91,12 +91,43 @@ export class EditProgress {
       this.logger.debug('出现错误，可能还没有选择要修改的内容')
       return
     }
-
+    // 检查名称是否与之前的一样
     if (text === this.prevName) {
       this.logger.debug('新的名称和初始名称一样')
-      this.bot.telegram.sendMessage(this.chatId, '新的名字和初始名字一样，请输入另一个', Markup.inlineKeyboard([[Markup.button.callback('返回', 'reselect_content_edit')]]))
+      this.bot.telegram.sendMessage(this.chatId, '新名称与旧名称相同，换一个吧', Markup.inlineKeyboard([[Markup.button.callback('返回', 'reselect_content_edit')]]))
       return
     }
+    // 检查名称是否冲突
+    const reminds = readFromStoreFile(this.config.storeFile)
+    if (reminds instanceof Error) {
+      this.logger.error(`检查新的提醒项名称是否可用时出错 chatid: ${this.chatId} error: ${reminds.message}`)
+      this.bot.telegram.sendMessage(this.chatId, '检查新的提醒项名称是否可用时出错了，这个问题已经自动进行了反馈')
+      if (this.config.notifyChatId) {
+        // 反馈错误
+        this.bot.telegram.sendMessage(this.config.notifyChatId, `为 [${this.chatId}] 检查新提醒项名称是否可用时出错了，${reminds.message}`)
+      }
+      return
+    } else {
+      const remindForChat = reminds[this.chatId]
+      if (!remindForChat) {
+        // 为这个对话存储的提醒项不存在了
+        this.logger.error(`检查新的提醒项名称是否可用时出错 chatid: ${this.chatId} error: 为这个对话读取到的提醒项是空的`)
+        this.bot.telegram.sendMessage(this.chatId, '检查新的提醒项名称是否可用时出错了，这个问题已经自动进行了反馈')
+        if (this.config.notifyChatId) {
+          // 反馈错误
+          this.bot.telegram.sendMessage(this.config.notifyChatId, `为 [${this.chatId}] 检查新提醒项名称是否可用时出错了，因为这个对话读取到的提醒项是空的`)
+        }
+        return
+      }
+      const remind = remindForChat[text]
+      if (remind) {
+        // 名称冲突
+        this.logger.info(`新的名称不可用，名称冲突 chatid: ${this.chatId} name: ${text}`)
+        this.bot.telegram.sendMessage(this.chatId, `已经有名为 ${text} 的提醒项了，换一个名称吧`, Markup.inlineKeyboard([[Markup.button.callback('返回', 'reselect_content_edit')]]))
+        return
+      }
+    }
+    // 名称可用
     this.name = text
     this.logger.debug(`获取到新的名称 chatId: ${this.chatId} name: ${this.prevName} -> ${this.name}`)
     const btnLine2: ReturnType<typeof Markup.button.callback>[] = []

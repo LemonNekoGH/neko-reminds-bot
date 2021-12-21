@@ -52,7 +52,7 @@ export class DrinkBot {
 
       bot.command('start', async (ctx) => {
         logger.info('收到 start 指令')
-        progressChatIdMap.set(ctx.chat.id, new SettingProgress(ctx.chat.id, storeFile, logger))
+        progressChatIdMap.set(ctx.chat.id, new SettingProgress(ctx.chat.id, this.config, this.bot, logger))
         const inlineBtns = Markup.inlineKeyboard([[Markup.button.callback('取消设置', 'cancel_setting')]])
         ctx.reply('开始设置，请为你的提醒项起一个名称', inlineBtns)
       })
@@ -96,7 +96,7 @@ export class DrinkBot {
         const { id } = ctx.chat
         const progress = progressChatIdMap.get(id)
         if (progress) {
-          progress.prevStep(ctx)
+          progress.prevStep()
         } else {
           ctx.reply('请不要点击最后一条信息之前的按钮')
         }
@@ -271,7 +271,7 @@ export class DrinkBot {
 
         if (progress) {
           // 在设置过程
-          progress.nextStep(text, ctx)
+          progress.nextStep(text)
         } else if (editProgress) {
           // 在编辑过程
           if (text === '取消') {

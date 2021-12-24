@@ -1,6 +1,6 @@
 import HttpsProxyAgent from 'https-proxy-agent/dist/agent'
 import path from 'path'
-import { IDrinkBotConfig } from './type'
+import { IDrinkBotConfig } from '.'
 
 export const config: IDrinkBotConfig = {
   token: '1234567890:AbCdEfGhIjKlMnOpqRsTuVwXyz-01234567',

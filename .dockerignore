@@ -1,0 +1,13 @@
+node_modules/
+
+.idea
+*.iml
+
+.DS_Store
+.vscode
+
+yarn-error.log
+
+**/*/dist/
+
+testStore.json

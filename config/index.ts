@@ -2,7 +2,7 @@ import axios from 'axios'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import { Logger } from 'log4js'
 import fs from 'fs'
-import { Reminds } from '../src'
+import { Reminds } from '../src/DataStore'
 
 export interface IDrinkBotConfig {
     token: string // Telegram Bot API Token
@@ -14,9 +14,9 @@ export interface IDrinkBotConfig {
 
 // 配置文件实体类
 export class DrinkBotConfig implements IDrinkBotConfig {
-    token: string;
-    storeFile: string;
-    webhookUrl?: string;
+    token: string
+    storeFile: string
+    webhookUrl?: string
     httpsProxyAgent?: HttpsProxyAgent
     notifyChatId?: number
 

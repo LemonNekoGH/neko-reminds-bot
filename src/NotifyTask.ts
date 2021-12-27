@@ -1,7 +1,7 @@
 import log4js from 'log4js'
 import cron from 'node-cron'
 import { Telegraf } from 'telegraf'
-import { RemindItem } from '.'
+import { RemindItem } from './DataStore'
 import cronParser, { CronExpression } from 'cron-parser'
 import moment from 'moment'
 

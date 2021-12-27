@@ -1,7 +1,7 @@
 import log4js from 'log4js'
 import fs from 'fs'
 import { Telegraf } from 'telegraf'
-import { Reminds } from '.'
+import { Reminds } from './DataStore'
 import { NotifyTask } from './NotifyTask'
 
 // 提示任务管理器

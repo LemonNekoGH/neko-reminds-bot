@@ -1,5 +1,5 @@
 import { Markup, Telegraf } from 'telegraf'
-import { RemindItem } from '.'
+import { DataStore, RemindItem } from './DataStore'
 import { readFromStoreFile, saveToStoreFile } from './utils'
 import { Logger } from 'log4js'
 import { DrinkBotConfig } from '../config'
@@ -98,34 +98,20 @@ export class EditProgress {
       return
     }
     // 检查名称是否冲突
-    const reminds = readFromStoreFile(this.config.storeFile)
-    if (reminds instanceof Error) {
-      this.logger.error(`检查新的提醒项名称是否可用时出错 chatid: ${this.chatId} error: ${reminds.message}`)
+    try {
+      const dataStore = new DataStore(this.config, this.logger)
+      if (dataStore.isRemindItemNameExists(this.chatId, text)) {
+        this.bot.telegram.sendMessage(this.chatId, '新名称与已经存在的提醒项名称冲突，换一个吧', Markup.inlineKeyboard([[Markup.button.callback('返回', 'reselect_content_edit')]]))
+        return
+      }
+    } catch (e) {
+      this.logger.error(`检查新的提醒项名称是否可用时出错 chatid: ${this.chatId} error: ${(e as Error).message}`)
       this.bot.telegram.sendMessage(this.chatId, '检查新的提醒项名称是否可用时出错了，这个问题已经自动进行了反馈')
       if (this.config.notifyChatId) {
         // 反馈错误
-        this.bot.telegram.sendMessage(this.config.notifyChatId, `为 [${this.chatId}] 检查新提醒项名称是否可用时出错了，${reminds.message}`)
+        this.bot.telegram.sendMessage(this.config.notifyChatId, `为 [${this.chatId}] 检查新提醒项名称是否可用时出错了，${(e as Error).message}`)
       }
       return
-    } else {
-      const remindForChat = reminds[this.chatId]
-      if (!remindForChat) {
-        // 为这个对话存储的提醒项不存在了
-        this.logger.error(`检查新的提醒项名称是否可用时出错 chatid: ${this.chatId} error: 为这个对话读取到的提醒项是空的`)
-        this.bot.telegram.sendMessage(this.chatId, '检查新的提醒项名称是否可用时出错了，这个问题已经自动进行了反馈')
-        if (this.config.notifyChatId) {
-          // 反馈错误
-          this.bot.telegram.sendMessage(this.config.notifyChatId, `为 [${this.chatId}] 检查新提醒项名称是否可用时出错了，因为这个对话读取到的提醒项是空的`)
-        }
-        return
-      }
-      const remind = remindForChat[text]
-      if (remind) {
-        // 名称冲突
-        this.logger.info(`新的名称不可用，名称冲突 chatid: ${this.chatId} name: ${text}`)
-        this.bot.telegram.sendMessage(this.chatId, `已经有名为 ${text} 的提醒项了，换一个名称吧`, Markup.inlineKeyboard([[Markup.button.callback('返回', 'reselect_content_edit')]]))
-        return
-      }
     }
     // 名称可用
     this.name = text
@@ -204,35 +190,22 @@ export class EditProgress {
   // 选择提醒项步骤
   stepSelectItemByName: (text: string) => Promise<void> = async (text) => {
     this.logger.debug('开始验证提醒项名称是否存在')
-    const reminds = readFromStoreFile(this.config.storeFile)
-    if (reminds instanceof Error) {
-      this.logger.error('读取存储文件时出错: ' + reminds.message)
-      this.bot.telegram.sendMessage(this.chatId, '在检查收到的提醒项名称是否存在时出错，这个问题已经同时进行了反馈')
+    const dataStore = new DataStore(this.config, this.logger)
+    let remind: RemindItem | undefined
+    try {
+      remind = dataStore.getRemindItem(this.chatId, text)
+      if (!remind) {
+        this.logger.info('没有提醒项 chatid: ' + this.chatId)
+        this.bot.telegram.sendMessage(this.chatId, '没有这个名字的提醒项')
+        return
+      }
+    } catch (e) {
+      this.logger.error('检查提醒项是否存在时出错: ' + (e as Error).message)
+      this.bot.telegram.sendMessage(this.chatId, '在检查收到的提醒项名称是否存在时出错，这个问题已经自动进行了反馈')
       const notifyId = this.config.notifyChatId
       if (notifyId) {
-        this.bot.telegram.sendMessage(notifyId, `在为 [${this.chatId}] 显示可编辑提醒项列表时出错了: ${reminds.message}`)
+        this.bot.telegram.sendMessage(notifyId, `在为 [${this.chatId}] 检查提醒项是否存在时出错了: ${(e as Error).message}`)
       }
-      return
-    }
-    const remindsForChat = reminds[this.chatId]
-    if (!remindsForChat) {
-      // 没有提醒项
-      this.logger.info('没有提醒项 chatid: ' + this.chatId)
-      this.bot.telegram.sendMessage(this.chatId, '没有这个名字的提醒项')
-      return
-    }
-    const keys = Object.keys(reminds)
-    if (keys.length === 0) {
-      // 也没有提醒项
-      this.logger.info('没有提醒项 chatid: ' + this.chatId)
-      this.bot.telegram.sendMessage(this.chatId, '没有这个名字的提醒项')
-      return
-    }
-    const remind = remindsForChat[text]
-    if (!remind) {
-      // 提醒项不存在
-      this.logger.info('没有提醒项 chatid: ' + this.chatId)
-      this.bot.telegram.sendMessage(this.chatId, '没有这个名字的提醒项')
       return
     }
     // 提醒项存在，开始编辑

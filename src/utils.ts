@@ -1,4 +1,4 @@
-import { Reminds } from '.'
+import { Reminds } from './DataStore'
 import fs from 'fs'
 
 // 把提醒项保存到文件中

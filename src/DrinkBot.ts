@@ -29,8 +29,6 @@ export class DrinkBot {
       this.editProgressChatIdMap = new Map()
 
       this.taskManager = new NotifyTaskManager(this.bot, this.logger)
-      this.taskManager.initOrUpdateTasks(this.config.storeFile)
-
       this.initBot()
     }
 
@@ -327,11 +325,13 @@ export class DrinkBot {
         })
       } else {
         bot.launch().then(() => {
-          // 启动成功后，给要提醒的 chatid 发送消息提示
+          // 启动成功后，初始化提醒任务并发送给用户
+          this.taskManager.initOrUpdateTasks(this.config.storeFile)
+          this.taskManager.sendRebootMessage()
           if (notifyChatId) {
             bot.telegram.sendMessage(notifyChatId, '柠喵的喝水提醒小助手已成功启动')
           }
-          logger.info('bot is now running')
+          logger.info('Bot 启动好了')
         }).catch((e) => {
           console.error(e.message)
         })

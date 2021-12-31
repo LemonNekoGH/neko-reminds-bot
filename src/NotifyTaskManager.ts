@@ -16,8 +16,29 @@ export class NotifyTaskManager {
       this.logger = logger
     }
 
-    // 初始化或更新任务
-    // @params storeFile 提醒存储文件
+    /**
+     * 发送重启消息
+     */
+    sendRebootMessage: () => void = () => {
+      this.taskMap.forEach((reminds, chatid) => {
+        let message = '非常抱歉，由于一些特殊情况，我重新启动了\n下面是这个对话设置的提醒项内容和下次提醒的时间\n'
+        reminds.forEach((remind, name) => {
+          message += `名称: ${name}\n内容: ${remind.notifyContent}\n下次提醒时间: ${remind.nextRunTime()}\n\n`
+        })
+        this.logger.info(`开始为 [${chatid}] 发送重启消息`)
+        this.bot.telegram.sendMessage(chatid, message).then(() => {
+          this.logger.info(`为 [${chatid}] 发送重启消息成功`)
+        }).catch((e) => {
+          this.logger.info(`为 [${chatid}] 发送重启消息失败 error: ${JSON.stringify(e)}`)
+        })
+      })
+      this.logger.debug('发送重启消息完成')
+    }
+
+    /**
+     * 初始化或更新任务
+     * @param storeFile 提醒存储文件
+     */
     initOrUpdateTasks: (storeFile: string) => void = (storeFile) => {
       this.logger.info('开始初始化/更新提醒任务')
       // 读取存储文件

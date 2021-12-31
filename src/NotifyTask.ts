@@ -69,4 +69,15 @@ export class NotifyTask {
     equalsTo: (item: RemindItem) => boolean = (item) => {
       return this.notifyStr === item.text && this.cronExp === item.cron
     }
+
+    get notifyContent (): string {
+      return this.notifyStr
+    }
+
+    /**
+     * 获取下次运行的时间
+     */
+    nextRunTime: () => string = () => {
+      return moment(this.parsedCron.next().toISOString()).format('YYYY 年 MM 月 DD 日 HH:mm:ss')
+    }
 }

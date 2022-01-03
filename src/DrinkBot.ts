@@ -6,6 +6,8 @@ import { SettingProgress } from './SettingProgress'
 import packageJson from '../package.json'
 import express from 'express'
 import { EditProgress } from './EditProgress'
+import { DataStore } from './DataStore'
+import { getNextRunTime } from './utils'
 
 // 喝水 Bot 实例
 export class DrinkBot {
@@ -57,12 +59,20 @@ export class DrinkBot {
 
       bot.command('edit', (ctx) => {
         logger.info('收到 edit 指令')
-        const progress = new EditProgress(bot, logger, this.config, ctx.chat.id)
-        if (progress.showAllItemName()) {
-          this.editProgressChatIdMap.set(ctx.chat.id, progress)
-        } else {
-          ctx.reply('没有找到为这个对话设置的提醒项')
+        // 获取提醒项列表
+        const dataStore = new DataStore(this.config, this.logger)
+        const remindsList = dataStore.getRemindsListForChat(ctx.chat.id)
+        if (!remindsList.length) {
+          logger.info('没有为这个对话设置提醒项 chatId' + ctx.chat.id)
+          ctx.reply('没有为这个对话设置提醒项')
+          return
         }
+        // 发送提醒项列表
+        const replyKeyboard: ReturnType<typeof Markup.button.callback>[][] = []
+        remindsList.forEach(it => {
+          replyKeyboard.push([Markup.button.callback(it, `edit.select.${it}`)])
+        })
+        this.bot.telegram.sendMessage(ctx.chat.id, '选择一个要修改的提醒项: ', Markup.inlineKeyboard(replyKeyboard))
       })
 
       bot.command('import', (ctx) => {
@@ -131,132 +141,157 @@ export class DrinkBot {
         ctx.answerCbQuery()
       })
 
-      // 修改提醒项名称
-      bot.action('name_edit', (ctx) => {
+      // 重新展示提醒项列表
+      bot.action('edit.back', (ctx) => {
+        // 确保当前对话是有效的
         if (!ctx.chat) {
           return
         }
-        const { id } = ctx.chat
-        const progress = this.editProgressChatIdMap.get(id)
-        if (progress) {
-          // 在修改过程中
-          progress.nowStep = 2
-          ctx.reply('请回复新的名称', Markup.inlineKeyboard([[Markup.button.callback('返回', 'reselect_content_edit')], [Markup.button.callback('取消', 'cancel_edit')]]))
-        } else {
-          // 不在修改过程中
-          ctx.reply('没有在修改过程中')
-        }
-        ctx.answerCbQuery()
-      })
-
-      // 修改提醒项内容
-      bot.action('text_edit', (ctx) => {
-        if (!ctx.chat) {
+        // 获取提醒项列表
+        const dataStore = new DataStore(this.config, this.logger)
+        const remindsList = dataStore.getRemindsListForChat(ctx.chat.id)
+        if (!remindsList.length) {
+          logger.info('没有为这个对话设置提醒项 chatId' + ctx.chat.id)
+          ctx.reply('没有为这个对话设置提醒项')
           return
         }
-        const { id } = ctx.chat
-        const progress = this.editProgressChatIdMap.get(id)
-        if (progress) {
-          // 在修改过程中
-          progress.nowStep = 4
-          ctx.reply('请回复新的内容', Markup.inlineKeyboard([[Markup.button.callback('返回', 'reselect_content_edit')], [Markup.button.callback('取消', 'cancel_edit')]]))
-        } else {
-          // 不在修改过程中
-          ctx.reply('没有在修改过程中')
-        }
-        ctx.answerCbQuery()
-      })
-
-      // 修改提醒项周期
-      bot.action('cron_edit', (ctx) => {
-        if (!ctx.chat) {
-          return
-        }
-        const { id } = ctx.chat
-        const progress = this.editProgressChatIdMap.get(id)
-        if (progress) {
-          // 在修改过程中
-          progress.nowStep = 3
-          ctx.reply('请回复新的提醒周期', Markup.inlineKeyboard([[Markup.button.callback('返回', 'reselect_content_edit')], [Markup.button.callback('取消', 'cancel_edit')]]))
-        } else {
-          // 不在修改过程中
-          ctx.reply('没有在修改过程中')
-        }
-        ctx.answerCbQuery()
-      })
-
-      // 返回到选择要修改的字段
-      bot.action('reselect_content_edit', (ctx) => {
-        if (!ctx.chat) {
-          return
-        }
-        const { id } = ctx.chat
-        const progress = this.editProgressChatIdMap.get(id)
-        if (progress) {
-          // 在修改过程中
-          progress.nowStep = 1
-          const { prevName, name, remindItem, newRemindItem } = progress
-          if (!remindItem || !newRemindItem) {
-            this.logger.debug('可能还没有选择要修改的提醒项')
-          } else {
-            this.logger.debug(`返回到选择要修改的字段 chatid: ${id}`)
-            const btnLine2: ReturnType<typeof Markup.button.callback>[] = []
-            if (name !== prevName || remindItem.cron !== newRemindItem.cron || remindItem.text !== newRemindItem.text) {
-              // 有项目被修改了，加入保存按钮
-              btnLine2.push(Markup.button.callback('保存修改', 'save_edit'))
-            }
-            btnLine2.push(Markup.button.callback('取消修改', 'cancel_edit'))
-            ctx.reply('请选择要修改的字段', Markup.inlineKeyboard([
-              [Markup.button.callback('名称', 'name_edit'), Markup.button.callback('提醒内容', 'text_edit'), Markup.button.callback('提醒周期', 'cron_edit')],
-              btnLine2
-            ]))
+        // 发送提醒项列表
+        const replyKeyboard: ReturnType<typeof Markup.button.callback>[][] = []
+        remindsList.forEach(it => {
+          replyKeyboard.push([Markup.button.callback(it, `edit.select.${it}`)])
+        })
+        this.bot.telegram.sendMessage(ctx.chat.id, '选择一个要修改的提醒项: ', Markup.inlineKeyboard(replyKeyboard)).then(() => {
+          // 确保当前对话仍然是有效的
+          if (!ctx.chat) {
+            return
           }
-        } else {
-          // 不在修改过程中
-          ctx.reply('没有在修改过程中')
-        }
-        ctx.answerCbQuery()
-      })
-
-      // 返回到选择要修改的提醒项
-      bot.action('reselect_item_edit', (ctx) => {
-        if (!ctx.chat) {
-          return
-        }
-        const { id } = ctx.chat
-        const progress = this.editProgressChatIdMap.get(id)
-        if (progress) {
-          // 在修改过程中
-          progress.nowStep = 0
-          if (!progress.showAllItemName()) {
-            // 显示所有提醒项时发现提醒项无了
-            ctx.reply('找不到为这个对话设置的提醒项，已取消修改')
-            this.editProgressChatIdMap.delete(id)
+          // 发送成功后更新修改过程
+          let editProgress = this.editProgressChatIdMap.get(ctx.chat.id)
+          if (!editProgress) {
+            // 不在修改过程中，新建修改过程
+            editProgress = new EditProgress(this.bot, this.logger, this.config, ctx.chat.id)
           }
-        } else {
-          // 不在修改过程中
-          ctx.reply('没有在修改过程中')
-        }
-        ctx.answerCbQuery()
-      })
-
-      // 取消修改过程
-      bot.action('cancel_edit', (ctx) => {
-        this.requireActionInEditProgress(ctx, (ctx, progress) => {
-          this.editProgressChatIdMap.delete(ctx.chat!.id)
-          ctx.reply('已取消修改过程')
+          editProgress.remindName = ''
+          editProgress.waitFor = 'selectRemind'
+          this.editProgressChatIdMap.set(ctx.chat.id, editProgress)
         })
       })
 
-      // 保存修改
-      bot.action('save_edit', (ctx) => {
-        this.requireActionInEditProgress(ctx, (ctx, progress) => {
-          const success = progress.saveEdit()
-          if (success) {
-            ctx.reply('成功的保存了修改')
-            this.editProgressChatIdMap.delete(ctx.chat!.id)
-            taskManager.initOrUpdateTasks(this.config.storeFile)
+      // 选择要修改的提醒项
+      bot.action(/edit\.select\..*$/, (ctx) => {
+        // 确保当前对话是有效的
+        if (!ctx.chat) {
+          return
+        }
+        // 获取到要修改的提醒项名称
+        let name: string = (ctx.callbackQuery as any).data
+        name = name.substring('edit.select.'.length)
+        this.logger.debug(`收到要修改的提醒项 chatId: ${ctx.chat.id} name: ${name}`)
+        // 尝试获取提醒项
+        const dataStore = new DataStore(this.config, this.logger)
+        const remind = dataStore.getRemindItem(ctx.chat.id, name)
+        if (!remind) {
+          // 提醒项不存在
+          ctx.reply(`提醒项 [${name}] 已经不存在了`)
+          ctx.answerCbQuery()
+          return
+        }
+        // 发送提醒项具体信息，和操作按钮
+        const message = `当前提醒项: ${name}\n\n提醒周期 cron 表达式: ${remind.cron}\n提醒内容: ${remind.text}\n下次提醒时间: ${getNextRunTime(remind.cron)}\n你可以进行以下操作: `
+        const markupBtns = [
+          [Markup.button.callback('修改提醒周期', `edit.cron.${name}`)],
+          [Markup.button.callback('修改提醒内容', `edit.content.${name}`)],
+          [Markup.button.callback('« 返回提醒项列表', 'edit.back')]
+        ]
+        // 回复消息
+        ctx.reply(message, Markup.inlineKeyboard(markupBtns)).then(() => {
+          // 确保当前对话仍然是有效的
+          if (!ctx.chat) {
+            return
           }
+          // 发送成功后更新修改过程
+          let editProgress = this.editProgressChatIdMap.get(ctx.chat.id)
+          if (!editProgress) {
+          // 不在修改过程中，新建修改过程
+            editProgress = new EditProgress(this.bot, this.logger, this.config, ctx.chat.id)
+          }
+          editProgress.remindName = name
+          editProgress.waitFor = 'selectAction'
+          this.editProgressChatIdMap.set(ctx.chat.id, editProgress)
+        })
+      })
+
+      // 确定要修改周期
+      bot.action(/edit\.cron\..*$/, (ctx) => {
+        // 确保当前对话是有效的
+        if (!ctx.chat) {
+          return
+        }
+        // 获取到要修改的提醒项名称
+        let name: string = (ctx.callbackQuery as any).data
+        name = name.substring('edit.cron.'.length)
+        this.logger.debug(`收到要修改的提醒项 chatId: ${ctx.chat.id} name: ${name}`)
+        // 尝试获取提醒项
+        const dataStore = new DataStore(this.config, this.logger)
+        const remind = dataStore.getRemindItem(ctx.chat.id, name)
+        if (!remind) {
+          // 提醒项不存在
+          ctx.reply(`提醒项 [${name}] 已经不存在了`)
+          ctx.answerCbQuery()
+          return
+        }
+        // 告诉用户回复一个新的提醒周期
+        ctx.reply(`当前提醒项: ${name}\n\n提醒周期 cron 表达式: ${remind.cron}\n提醒内容: ${remind.text}\n下次提醒时间: ${getNextRunTime(remind.cron)}\n请回复新的提醒周期`).then(() => {
+          // 确保当前对话仍然是有效的
+          if (!ctx.chat) {
+            return
+          }
+          // 发送成功后更新修改过程
+          let editProgress = this.editProgressChatIdMap.get(ctx.chat.id)
+          if (!editProgress) {
+            // 不在修改过程中，新建修改过程
+            editProgress = new EditProgress(this.bot, this.logger, this.config, ctx.chat.id)
+          }
+          editProgress.remindName = name
+          editProgress.waitFor = 'cycle'
+          this.editProgressChatIdMap.set(ctx.chat.id, editProgress)
+        })
+      })
+
+      // 确定要修改内容
+      bot.action(/edit\.content\..*$/, (ctx) => {
+        // 确保当前对话是有效的
+        if (!ctx.chat) {
+          return
+        }
+        // 获取到要修改的提醒项名称
+        let name: string = (ctx.callbackQuery as any).data
+        name = name.substring('edit.content.'.length)
+        this.logger.debug(`收到要修改的提醒项 chatId: ${ctx.chat.id} name: ${name}`)
+        // 尝试获取提醒项
+        const dataStore = new DataStore(this.config, this.logger)
+        const remind = dataStore.getRemindItem(ctx.chat.id, name)
+        if (!remind) {
+          // 提醒项不存在
+          ctx.reply(`提醒项 [${name}] 已经不存在了`)
+          ctx.answerCbQuery()
+          return
+        }
+        // 告诉用户回复一个新的提醒周期
+        ctx.reply(`当前提醒项: ${name}\n\n提醒周期 cron 表达式: ${remind.cron}\n提醒内容: ${remind.text}\n下次提醒时间: ${getNextRunTime(remind.cron)}\n请回复新的提醒内容`).then(() => {
+          // 确保当前对话仍然是有效的
+          if (!ctx.chat) {
+            return
+          }
+          // 发送成功后更新修改过程
+          let editProgress = this.editProgressChatIdMap.get(ctx.chat.id)
+          if (!editProgress) {
+            // 不在修改过程中，新建修改过程
+            editProgress = new EditProgress(this.bot, this.logger, this.config, ctx.chat.id)
+          }
+          editProgress.remindName = name
+          editProgress.waitFor = 'content'
+          this.editProgressChatIdMap.set(ctx.chat.id, editProgress)
         })
       })
 
@@ -278,16 +313,10 @@ export class DrinkBot {
           progress.nextStep(text)
         } else if (editProgress) {
           // 在编辑过程
-          if (text === '取消') {
-            this.logger.info('取消了编辑过程 chatid: ' + id)
-            this.editProgressChatIdMap.delete(id)
-            ctx.reply('取消了编辑过程', Markup.removeKeyboard())
-          } else {
-            editProgress.receivedText(text)
-          }
+          editProgress.receivedText(text)
         } else {
           // 不在，复读
-          ctx.reply('我是一个没有感情的提醒机器人，没事不要和我说话，说话我也只会回复这么一句。', Markup.removeKeyboard())
+          ctx.reply('略略略', Markup.removeKeyboard())
         }
       })
     }

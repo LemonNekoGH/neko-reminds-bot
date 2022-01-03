@@ -112,7 +112,7 @@ export class DataStore {
   // 修改或新增提醒项
   // 新增提醒项时 ignoreExists 应该传入 true
   // 修改提醒项时，没有读取到提醒项时报错
-  setRemindItem: (chatId: number, name: string, item: RemindItem, ignoreNotExists: boolean) => void = (chatId, name, item, ignoreNotExists = false) => {
+  setRemindItem: (chatId: number, name: string, item: RemindItem, ignoreNotExists?: boolean) => void = (chatId, name, item, ignoreNotExists = false) => {
     let remindsForChat = this.remindsData.get(chatId)
     if (!remindsForChat) {
       if (!ignoreNotExists) {

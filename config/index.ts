@@ -8,7 +8,7 @@ export interface IDrinkBotConfig {
     token: string // Telegram Bot API Token
     storeFile: string // 数据存储文件
     webhookUrl?: string // 如果使用 Webhook，需提供地址
-    httpsProxyAgent?: HttpsProxyAgent // 如果使用代理，请提供 @see HttpsProxyAgent 对象
+    proxyUrl?: string // 如果使用代理，请提供代理地址
     notifyChatId?: number // 启动时要提醒的聊天 id
 }
 
@@ -21,11 +21,11 @@ export class DrinkBotConfig implements IDrinkBotConfig {
     notifyChatId?: number
 
     // 从配置文件结构创建配置文件实体类
-    constructor ({ token, storeFile, webhookUrl, httpsProxyAgent, notifyChatId }: IDrinkBotConfig) {
+    constructor ({ token, storeFile, webhookUrl, proxyUrl, notifyChatId }: IDrinkBotConfig) {
       this.token = token
       this.storeFile = storeFile
       this.webhookUrl = webhookUrl
-      this.httpsProxyAgent = httpsProxyAgent
+      this.httpsProxyAgent = proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined
       this.notifyChatId = notifyChatId
     }
 
@@ -78,15 +78,35 @@ export class DrinkBotConfig implements IDrinkBotConfig {
 export const readConfig: (logger: Logger) => Promise<DrinkBotConfig | null> = async (logger) => {
   // 获取配置文件
   let config: IDrinkBotConfig | null = null
-
-  try {
-    const { config: c } = await import('./config')
-    config = c
-    logger.debug('配置文件获取成功')
-  } catch (e) {
-    logger.error('配置文件获取失败，请根据 config 文件夹中的 config.ts.example 创建 config.ts')
-    return null
+  // 尝试从参数中获取配置文件位置
+  let configPath = ''
+  for (let arg in process.argv) {
+    if (process.argv[arg].startsWith('--config=')) {
+      configPath = process.argv[arg].slice('--config='.length)
+      break
+    }
   }
-
-  return new DrinkBotConfig(config as IDrinkBotConfig)
+  if (!configPath) {
+    logger.info('没有从参数中找到配置文件的位置')
+    // 尝试从环境变量中获取配置文件的位置
+    configPath = process.env.REMINDS_BOT_CONFIG_PATH ?? ''
+    if (!configPath) {
+      logger.error('没有从环境变量中找到配置文件的位置，无法继续')
+      process.exit(1)
+    } else {
+      logger.info('从环境变量中找到了配置文件的位置：' + configPath)
+    }
+  } else {
+    logger.info('从参数中找到了配置文件的位置：' + configPath)
+  }
+  // 尝试读取配置文件
+  try {
+    const content = fs.readFileSync(configPath)
+    config = JSON.parse(content.toString()) as IDrinkBotConfig
+    return new DrinkBotConfig(config)
+  } catch (e) {
+    const err = e as Error
+    logger.error('配置文件读取失败：' + err.name + ' ' + err.message)
+    process.exit(1)
+  }
 }

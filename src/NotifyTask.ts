@@ -35,7 +35,8 @@ export class NotifyTask {
         await this.bot.telegram.sendMessage(this.chatId, this.notifyStr)
         this.logger.debug(`提醒发送完毕 chatid: ${this.chatId}, name: ${this.name}, 下次提醒时间: ${moment(this.parsedCron.next().toISOString()).format('YYYY-MM-DD hh:mm:ss')}`)
       } catch (e) {
-        this.logger.error('提醒发送失败')
+        const err = e as Error
+        this.logger.error('提醒发送失败：' + err.name + ':' + err.message)
       }
     }
 

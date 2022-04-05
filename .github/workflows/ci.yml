@@ -26,4 +26,4 @@ jobs:
         with:
           push: true
           tags: |
-            ghcr.io/LemonNekoGH/reminds-bot-beta:latest
+            ghcr.io/lemonnekogh/reminds-bot-beta:latest

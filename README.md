@@ -1,6 +1,5 @@
 # neko-reminds-bot
-有什么需要定时提醒的事情，交给我好了，设定的时间一到，我就会在对话中提醒你哦  
-目前来看我还挺菜的，如果有什么事情做错了，去和 [柠喵](https://t.me/lemonneko) 说就好了，她说了会让我变得更厉害的
+一个简易的用于在 Telegram 中设置提醒的 Bot，当提醒时间到时会向群组发送指定消息。待重写。
 
 ## 使用方法
 把 Bot 添加到你的群组，或直接与 Bot 聊天  
@@ -28,9 +27,7 @@ git clone https://github.com/LemonNekoGH/neko-time-to-drink-bot
 ```shell
 npm install
 ```
-准备配置文件和数据存储文件（这一步以后再写）
-
-运行
+准备好配置文件和数据存储文件之后运行以下命令
 ```shell
 npm run dev
 ```
@@ -46,24 +43,26 @@ git clone https://github.com/LemonNekoGH/neko-time-to-drink-bot
 ```shell
 docker build . -t neko-reminds-bot
 ```
-准备配置文件和数据存储文件（这一步以后再写）
-
-运行容器
+准备好配置文件和数据存储文件之后运行容器
 ```shell
 docker run -it -e REMINDS_BOT_CONFIG_PATH=<路径> -v <数据存储文件和配置文件所在的文件夹>:/app/shared
 ```
-
-## 使用时除了以下情况，都可以给仓库发送 Issue
-- 变成兔兔
-- 变成猫猫
-- 柠喵爆炸
-- 被麻匪给劫了
-- 遭遇电信诈骗
-- Bot 提醒你色色
-- 大都会过不了闸
-- 香港记者向你提问
-- 被面试官说 naive
-- 饮料洒在了键盘上
+## 配置文件与数据文件
+它们都是 `json` 格式
+```shell
+$ mkdir drink-bot-data && cd drink-bot-data
+$ touch config.json data.json
+```
+编写配置文件，这是模板
+```json5
+{
+    "token": "", // Telegram Bot API Token
+    "storeFile": "./data.json", // 数据存储文件路径，也可以指定其它路径
+    "webhookUrl": "", // 如果使用 Webhook，需提供地址，如果不需要，可以删除此字段
+    "proxyUrl": "", // 如果使用代理，请提供代理地址，如果不需要，可以删除此字段
+    "notifyChatId": 0 // 启动时要提醒的聊天 id，在启动后会发送一条提醒到指定的聊天，如果不需要，可以删除此字段
+}
+```
 
 ## 已知特性
 - [ ] 被添加到群组里后，所有人都可以设置提醒项
